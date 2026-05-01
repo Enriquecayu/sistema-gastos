@@ -25,6 +25,7 @@ const transaccion = sequelize.define("transaccion", {
     }
 }, {
     timestamps: true,
+    paranoid: true,
     tableName: "transaccion"
 });
 
