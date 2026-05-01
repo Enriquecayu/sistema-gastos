@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from './api/axios';
 
 function App() {
   // --- ESTADOS ---
   const [transacciones, setTransacciones] = useState([]);
+  const [borradas, setBorradas] = useState([]); // Estado para la papelera
   const [balance, setBalance] = useState(0);
+  const [mostrarPapelera, setMostrarPapelera] = useState(false);
   
   // Estados para el formulario
   const [descripcion, setDescripcion] = useState('');
@@ -12,28 +14,34 @@ function App() {
   const [tipo, setTipo] = useState('ingreso');
 
   // --- LÓGICA DE CARGA (READ) ---
-  // Metemos la función aquí para evitar el error de "cascading renders"
-  useEffect(() => {
-    const cargarDatos = async () => {
-      try {
-        const resBalance = await api.get('/balance');
-        const resTrans = await api.get('/transacciones');
-        
-        setBalance(resBalance.data?.saldo_total || 0);
-        setTransacciones(resTrans.data || []);
-      } catch (error) {
-        console.error("Error al conectar con el Backend:", error);
-      }
-    };
+  const cargarDatos = useCallback(async () => {
+    try {
+      const resBalance = await api.get('/balance');
+      const resTrans = await api.get('/transacciones');
+      
+      setBalance(resBalance.data?.saldo_total || 0);
+      setTransacciones(resTrans.data || []);
+    } catch (error) {
+      console.error("Error al conectar con el Backend:", error);
+    }
+  }, []);
 
+  const cargarPapelera = async () => {
+    try {
+      const res = await api.get('/transacciones/papelera');
+      setBorradas(res.data || []);
+    } catch (error) {
+      console.error("Error al cargar papelera:", error);
+    }
+  };
+
+  useEffect(() => {
     cargarDatos();
-  }, []); // Array vacío: solo se ejecuta al montar el componente
+  }, [cargarDatos]);
 
   // --- LÓGICA DE CREACIÓN (CREATE) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validación básica de analista
     if (!descripcion || !monto) return alert("Completá todos los campos");
 
     try {
@@ -42,106 +50,111 @@ function App() {
         monto: parseFloat(monto),
         tipo
       });
-
-      // Limpiamos el formulario
       setDescripcion('');
       setMonto('');
-      
-      // Forzamos la recarga de datos para ver el nuevo balance y lista
-      window.location.reload(); 
-      // Nota: También podrías volver a llamar a cargarDatos si la sacás del useEffect
+      cargarDatos(); // Recarga sin refrescar pantalla
     } catch (error) {
-      console.error("Error al crear transacción:", error);
-      alert("Hubo un error al guardar");
+      alert("Error al guardar");
     }
   };
 
-  
+  // --- LÓGICA DE BORRADO LÓGICO (DELETE) ---
+  const eliminarTransaccion = async (id) => {
+    if (window.confirm("¿Enviar a la papelera?")) {
+      try {
+        await api.delete(`/transacciones/${id}`);
+        cargarDatos();
+      } catch (error) {
+        alert("Error al eliminar");
+      }
+    }
+  };
 
-  // --- RENDERIZADO (VISTA) ---
+  // --- LÓGICA DE RESTAURACIÓN ---
+  const restaurarTransaccion = async (id) => {
+    try {
+      await api.post(`/transacciones/restaurar/${id}`);
+      cargarPapelera(); // Actualiza lista de borrados
+      cargarDatos();    // Actualiza lista activa y balance
+    } catch (error) {
+      alert("Error al restaurar");
+    }
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
       <header style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h1>Control de Gastos 💰</h1>
         <div style={{ 
-          background: '#2ecc71', color: 'white', padding: '20px', 
-          borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
+          background: balance >= 0 ? '#2ecc71' : '#e74c3c', 
+          color: 'white', padding: '20px', borderRadius: '12px', transition: '0.3s'
         }}>
           <h2 style={{ margin: 0 }}>Saldo Actual</h2>
           <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0 0 0' }}>
-            ${balance.toLocaleString()}
+            ${Number(balance).toLocaleString()}
           </p>
         </div>
       </header>
 
       {/* FORMULARIO */}
-      <section style={{ background: '#f9f9f9', padding: '20px', borderRadius: '10px', marginBottom: '30px' }}>
-        <h3>Nueva Transacción</h3>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <input 
-            type="text" placeholder="Ej: Sueldo, Supermercado..." 
-            value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
-            style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-          />
-          <input 
-            type="number" placeholder="Monto" 
-            value={monto} onChange={(e) => setMonto(e.target.value)}
-            style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-          />
-          <select 
-            value={tipo} onChange={(e) => setTipo(e.target.value)}
-            style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-          >
-            <option value="ingreso">Ingreso (+)</option>
-            <option value="gasto">Gasto (-)</option>
-          </select>
-          <button type="submit" style={{ 
-            padding: '12px', background: '#3498db', color: 'white', 
-            border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' 
-          }}>
-            Guardar Movimiento
-          </button>
-        </form>
-      </section>
+      {!mostrarPapelera && (
+        <section style={{ background: '#f9f9f9', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+          <h3>Nueva Transacción</h3>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <input type="text" placeholder="Descripción" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} style={{ padding: '10px' }} />
+            <input type="number" placeholder="Monto" value={monto} onChange={(e) => setMonto(e.target.value)} style={{ padding: '10px' }} />
+            <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ padding: '10px' }}>
+              <option value="ingreso">Ingreso (+)</option>
+              <option value="gasto">Gasto (-)</option>
+            </select>
+            <button type="submit" style={{ padding: '12px', background: '#3498db', color: 'white', border: 'none', cursor: 'pointer' }}>Guardar</button>
+          </form>
+        </section>
+      )}
 
-      {/* LISTADO */}
-     {/* --- LISTADO CON SCROLL --- */}
-<section>
-  <h3>Historial de Movimientos</h3>
-  
-  <div style={{ 
-    maxHeight: '400px',      // Altura máxima antes de activar el scroll
-    overflowY: 'auto',       // Activa el scroll vertical solo si es necesario
-    padding: '10px',
-    background: '#ffffff',
-    border: '1px solid #ddd',
-    borderRadius: '10px',
-    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' // Un toque de profundidad
-  }}>
-    {transacciones.length === 0 ? (
-      <p style={{ textAlign: 'center', color: '#888' }}>No hay movimientos registrados.</p>
-    ) : (
-      // Usamos .reverse() para que la más nueva aparezca arriba
-      [...transacciones].reverse().map((t) => (
-        <div key={t.id} style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          padding: '12px', 
-          borderBottom: '1px solid #eee',
-          fontSize: '14px'
-        }}>
-          <span style={{ fontWeight: '500' }}>{t.descripcion}</span>
-          <span style={{ 
-            fontWeight: 'bold', 
-            color: t.tipo === 'gasto' ? '#e74c3c' : '#27ae60' 
-          }}>
-            {t.tipo === 'gasto' ? '-' : '+'}${t.monto}
-          </span>
+      {/* BOTÓN PAPELERA */}
+      <button 
+        onClick={() => {
+          setMostrarPapelera(!mostrarPapelera);
+          if (!mostrarPapelera) cargarPapelera();
+        }}
+        style={{ marginBottom: '20px', background: '#95a5a6', color: 'white', border: 'none', padding: '10px', borderRadius: '5px', cursor: 'pointer' }}
+      >
+        {mostrarPapelera ? "← Volver al Historial" : "Ver Papelera 🗑️"}
+      </button>
+
+      {/* CONTENIDO PRINCIPAL */}
+      <section>
+        <h3>{mostrarPapelera ? "Papelera de Reciclaje" : "Historial de Movimientos"}</h3>
+        <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px', background: '#fff', border: '1px solid #ddd', borderRadius: '10px' }}>
+          
+          {/* MODO PAPELERA */}
+          {mostrarPapelera ? (
+            borradas.length === 0 ? <p>Papelera vacía</p> : borradas.map(t => (
+              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee' }}>
+                <span>{t.descripcion} (${t.monto})</span>
+                <button onClick={() => restaurarTransaccion(t.id)} style={{ color: '#2ecc71', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 'bold' }}>Restaurar</button>
+              </div>
+            ))
+          ) : (
+            /* MODO HISTORIAL */
+            transacciones.length === 0 ? <p>No hay movimientos</p> : [...transacciones].reverse().map(t => (
+              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderBottom: '1px solid #eee' }}>
+                <div>
+                  <span style={{ fontWeight: '500' }}>{t.descripcion}</span>
+                  <br /><small style={{ color: '#aaa' }}>{new Date(t.createdAt).toLocaleDateString()}</small>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontWeight: 'bold', color: t.tipo === 'gasto' ? '#e74c3c' : '#27ae60' }}>
+                    {t.tipo === 'gasto' ? '-' : '+'}${parseFloat(t.monto).toLocaleString()}
+                  </span>
+                  <button onClick={() => eliminarTransaccion(t.id)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>×</button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      ))
-    )}
-  </div>
-</section>
+      </section>
     </div>
   );
 }
