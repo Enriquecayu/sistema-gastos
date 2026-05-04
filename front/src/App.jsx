@@ -1,160 +1,216 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from './api/axios';
 
-function App() {
-  // --- ESTADOS ---
-  const [transacciones, setTransacciones] = useState([]);
-  const [borradas, setBorradas] = useState([]); // Estado para la papelera
-  const [balance, setBalance] = useState(0);
-  const [mostrarPapelera, setMostrarPapelera] = useState(false);
-  
-  // Estados para el formulario
-  const [descripcion, setDescripcion] = useState('');
-  const [monto, setMonto] = useState('');
-  const [tipo, setTipo] = useState('ingreso');
+// Componentes
+import { BalanceCard } from './components/BalanceCard';
+import { FormularioTransaccion } from './features/FormularioTransaccion';
+import { Papelera } from './features/Papelera';
+import { GraficoGastos } from './features/GraficoGastos';
+import { FiltroFecha } from './features/FiltroFecha';
 
-  // --- LÓGICA DE CARGA (READ) ---
+function App() {
+  const [transacciones, setTransacciones] = useState([]);
+  const [balance, setBalance] = useState(0);
+  const [rango, setRango] = useState({ desde: '', hasta: '' });
+  const [filtroTipo, setFiltroTipo] = useState('todos');
+
+  const [vistaActual, setVistaActual] = useState('inicio');
+  const [mostrarPapelera, setMostrarPapelera] = useState(false);
+  const [verGrafico, setVerGrafico] = useState(false);
+
   const cargarDatos = useCallback(async () => {
     try {
       const resBalance = await api.get('/balance');
       const resTrans = await api.get('/transacciones');
-      
       setBalance(resBalance.data?.saldo_total || 0);
       setTransacciones(resTrans.data || []);
     } catch (error) {
-      console.error("Error al conectar con el Backend:", error);
+      console.error("Error al conectar con la base de datos:", error);
     }
   }, []);
-
-  const cargarPapelera = async () => {
-    try {
-      const res = await api.get('/transacciones/papelera');
-      setBorradas(res.data || []);
-    } catch (error) {
-      console.error("Error al cargar papelera:", error);
-    }
-  };
 
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // --- LÓGICA DE CREACIÓN (CREATE) ---
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!descripcion || !monto) return alert("Completá todos los campos");
+  const transaccionesFiltradas = transacciones.filter(t => {
+    const cumpleFecha = (!rango.desde || !rango.hasta) ? true :
+      (new Date(t.createdAt).toISOString().split('T')[0] >= rango.desde &&
+        new Date(t.createdAt).toISOString().split('T')[0] <= rango.hasta);
+    const cumpleTipo = filtroTipo === 'todos' ? true : t.tipo === filtroTipo;
+    return cumpleFecha && cumpleTipo;
+  });
 
-    try {
-      await api.post('/transacciones', {
-        descripcion,
-        monto: parseFloat(monto),
-        tipo
-      });
-      setDescripcion('');
-      setMonto('');
-      cargarDatos(); // Recarga sin refrescar pantalla
-    } catch (error) {
-      alert("Error al guardar");
-    }
-  };
-
-  // --- LÓGICA DE BORRADO LÓGICO (DELETE) ---
   const eliminarTransaccion = async (id) => {
-    if (window.confirm("¿Enviar a la papelera?")) {
+    if (window.confirm("¿Confirma que desea enviar este registro a la papelera?")) {
       try {
         await api.delete(`/transacciones/${id}`);
         cargarDatos();
       } catch (error) {
-        alert("Error al eliminar");
+        alert("Error al procesar la eliminación");
       }
     }
   };
 
-  // --- LÓGICA DE RESTAURACIÓN ---
-  const restaurarTransaccion = async (id) => {
-    try {
-      await api.post(`/transacciones/restaurar/${id}`);
-      cargarPapelera(); // Actualiza lista de borrados
-      cargarDatos();    // Actualiza lista activa y balance
-    } catch (error) {
-      alert("Error al restaurar");
-    }
-  };
-
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+
+      {/* CABECERA INSTITUCIONAL */}
       <header style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h1>Control de Gastos 💰</h1>
-        <div style={{ 
-          background: balance >= 0 ? '#2ecc71' : '#e74c3c', 
-          color: 'white', padding: '20px', borderRadius: '12px', transition: '0.3s'
-        }}>
-          <h2 style={{ margin: 0 }}>Saldo Actual</h2>
-          <p style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0 0 0' }}>
-            ${Number(balance).toLocaleString()}
-          </p>
+        <h1 style={{ color: '#2c3e50', fontSize: '2.5rem', marginBottom: '10px' }}>Sistema de Gestión de Gastos 🏫</h1>
+        <div style={{ maxWidth: '500px', margin: '0 auto', marginBottom: '25px' }}>
+          <BalanceCard balance={balance} />
         </div>
+
+        <button
+          onClick={() => {
+            setVistaActual(vistaActual === 'inicio' ? 'datos' : 'inicio');
+            setMostrarPapelera(false);
+            setVerGrafico(false);
+          }}
+          style={{
+            padding: '14px 60px', borderRadius: '35px', border: 'none', cursor: 'pointer',
+            backgroundColor: '#3498db', color: 'white', fontWeight: 'bold', fontSize: '1.2rem',
+            boxShadow: '0 6px 20px rgba(52, 152, 219, 0.3)', transition: '0.3s'
+          }}
+        >
+          {vistaActual === 'inicio' ? "Ver Libro Diario y Estadísticas →" : "← Volver a Carga de Datos"}
+        </button>
       </header>
 
-      {/* FORMULARIO */}
-      {!mostrarPapelera && (
-        <section style={{ background: '#f9f9f9', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
-          <h3>Nueva Transacción</h3>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <input type="text" placeholder="Descripción" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} style={{ padding: '10px' }} />
-            <input type="number" placeholder="Monto" value={monto} onChange={(e) => setMonto(e.target.value)} style={{ padding: '10px' }} />
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ padding: '10px' }}>
-              <option value="ingreso">Ingreso (+)</option>
-              <option value="gasto">Gasto (-)</option>
-            </select>
-            <button type="submit" style={{ padding: '12px', background: '#3498db', color: 'white', border: 'none', cursor: 'pointer' }}>Guardar</button>
-          </form>
-        </section>
+      {/* SECCIÓN DE CARGA (FORMULARIO PANORÁMICO) */}
+      {vistaActual === 'inicio' && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <div style={{
+            background: 'white', padding: '45px', borderRadius: '25px',
+            boxShadow: '0 12px 45px rgba(0,0,0,0.1)', width: '95%', maxWidth: '1200px'
+          }}>
+            <h2 style={{ marginTop: 0, color: '#2c3e50', textAlign: 'center', marginBottom: '40px', fontSize: '2rem' }}>
+              Registro de Movimiento Institucional
+            </h2>
+            <FormularioTransaccion onGuardar={cargarDatos} />
+          </div>
+        </div>
       )}
 
-      {/* BOTÓN PAPELERA */}
-      <button 
-        onClick={() => {
-          setMostrarPapelera(!mostrarPapelera);
-          if (!mostrarPapelera) cargarPapelera();
-        }}
-        style={{ marginBottom: '20px', background: '#95a5a6', color: 'white', border: 'none', padding: '10px', borderRadius: '5px', cursor: 'pointer' }}
-      >
-        {mostrarPapelera ? "← Volver al Historial" : "Ver Papelera 🗑️"}
-      </button>
+      {/* VISTA DE CONSULTA (DOS COLUMNAS) */}
+      {vistaActual === 'datos' && (
+        <main style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '30px', alignItems: 'start', animation: 'fadeIn 0.4s' }}>
 
-      {/* CONTENIDO PRINCIPAL */}
-      <section>
-        <h3>{mostrarPapelera ? "Papelera de Reciclaje" : "Historial de Movimientos"}</h3>
-        <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px', background: '#fff', border: '1px solid #ddd', borderRadius: '10px' }}>
-          
-          {/* MODO PAPELERA */}
-          {mostrarPapelera ? (
-            borradas.length === 0 ? <p>Papelera vacía</p> : borradas.map(t => (
-              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee' }}>
-                <span>{t.descripcion} (${t.monto})</span>
-                <button onClick={() => restaurarTransaccion(t.id)} style={{ color: '#2ecc71', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 'bold' }}>Restaurar</button>
-              </div>
-            ))
-          ) : (
-            /* MODO HISTORIAL */
-            transacciones.length === 0 ? <p>No hay movimientos</p> : [...transacciones].reverse().map(t => (
-              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderBottom: '1px solid #eee' }}>
-                <div>
-                  <span style={{ fontWeight: '500' }}>{t.descripcion}</span>
-                  <br /><small style={{ color: '#aaa' }}>{new Date(t.createdAt).toLocaleDateString()}</small>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontWeight: 'bold', color: t.tipo === 'gasto' ? '#e74c3c' : '#27ae60' }}>
-                    {t.tipo === 'gasto' ? '-' : '+'}${parseFloat(t.monto).toLocaleString()}
-                  </span>
-                  <button onClick={() => eliminarTransaccion(t.id)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>×</button>
+          {/* COLUMNA IZQUIERDA: FILTROS Y HERRAMIENTAS */}
+          <aside style={{ position: 'sticky', top: '20px' }}>
+            <div style={{ background: 'white', padding: '25px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
+              <h3 style={{ marginTop: 0, color: '#2c3e50', marginBottom: '20px', fontSize: '1.3rem' }}>Panel de Control</h3>
+
+              <FiltroFecha onFiltrar={(nuevoRango) => setRango(nuevoRango)} />
+
+              <div style={{ margin: '25px 0', padding: '20px 0', borderTop: '1px solid #f1f3f5' }}>
+                <span style={{ fontSize: '0.9rem', color: '#7f8c8d', fontWeight: 'bold', display: 'block', marginBottom: '12px' }}>Filtrar por Naturaleza:</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {['todos', 'ingreso', 'gasto'].map((tipo) => (
+                    <button key={tipo} onClick={() => setFiltroTipo(tipo)}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #ddd', cursor: 'pointer',
+                        background: filtroTipo === tipo ? '#2c3e50' : 'white', color: filtroTipo === tipo ? 'white' : '#7f8c8d', fontWeight: 'bold', transition: '0.2s'
+                      }}>
+                      {tipo === 'todos' ? 'Todos' : tipo === 'ingreso' ? 'Ing.' : 'Egr.'}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </section>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button onClick={() => { setMostrarPapelera(!mostrarPapelera); setVerGrafico(false); }}
+                  style={{ flex: 1, padding: '14px', borderRadius: '10px', background: mostrarPapelera ? '#2c3e50' : '#f1f3f5', color: mostrarPapelera ? 'white' : '#7f8c8d', fontWeight: 'bold', border: '1px solid #ddd', cursor: 'pointer' }}>
+                  {mostrarPapelera ? "← Volver" : "Papelera 🗑️"}
+                </button>
+                {!mostrarPapelera && (
+                  <button onClick={() => setVerGrafico(!verGrafico)}
+                    style={{ flex: 1, padding: '14px', borderRadius: '10px', background: verGrafico ? '#2c3e50' : '#8e44ad', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+                    {verGrafico ? "Lista 📋" : "Gráfico 📊"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </aside>
+
+          {/* COLUMNA DERECHA: RESULTADOS (LISTA CON SCROLL DE 6 ELEMENTOS) */}
+          <section style={{ background: 'white', padding: '35px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', minHeight: '600px' }}>
+            <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #f8f9fa', paddingBottom: '15px', marginBottom: '25px' }}>
+              {mostrarPapelera ? "Registros Eliminados" : verGrafico ? "Análisis de Presupuesto" : "Libro Diario de Movimientos"}
+            </h3>
+
+            {mostrarPapelera ? (
+              <Papelera onRestaurar={cargarDatos} />
+            ) : verGrafico ? (
+              <GraficoGastos transacciones={transaccionesFiltradas} />
+            ) : (
+              /* Altura máxima calculada para mostrar exactamente 6 movimientos antes del scroll */
+              <div style={{
+                maxHeight: '530px',
+                overflowY: 'auto',
+                paddingRight: '15px'
+              }}>
+                {transaccionesFiltradas.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#bdc3c7', marginTop: '50px', fontSize: '1.1rem' }}>
+                    No se encontraron movimientos registrados.
+                  </p>
+                ) : (
+                  [...transaccionesFiltradas].reverse().map((t) => (
+                    <div key={t.id} style={{
+                      display: 'flex', justifyContent: 'space-between', padding: '20px 10px',
+                      borderBottom: '1px solid #f1f3f5', alignItems: 'center'
+                    }}>
+                      <div>
+                        <strong style={{ display: 'block', fontSize: '1.15rem', color: '#2c3e50', marginBottom: '4px' }}>
+                          {t.descripcion}
+                        </strong>
+                        <span style={{
+                          fontSize: '0.85rem', color: '#ffffff', backgroundColor: '#95a5a6',
+                          padding: '2px 8px', borderRadius: '12px', marginRight: '10px'
+                        }}>
+                          {t.categoria}
+                        </span>
+                        <small style={{ color: '#bdc3c7' }}>
+                          {new Date(t.createdAt).toLocaleDateString()}
+                        </small>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
+                        <span style={{
+                          fontWeight: 'bold', fontSize: '1.3rem',
+                          color: t.tipo === 'gasto' ? '#e74c3c' : '#27ae60'
+                        }}>
+                          {t.tipo === 'gasto' ? '-' : '+'}${parseFloat(t.monto).toLocaleString()}
+                        </span>
+                        <button
+                          onClick={() => eliminarTransaccion(t.id)}
+                          style={{ color: '#ccc', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.8rem', transition: '0.2s' }}
+                          onMouseOver={(e) => e.target.style.color = '#e74c3c'}
+                          onMouseOut={(e) => e.target.style.color = '#ccc'}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </section>
+        </main>
+      )}
+
+      {/* ESTILOS GLOBALES RÁPIDOS */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #999; }
+      `}</style>
     </div>
   );
 }
