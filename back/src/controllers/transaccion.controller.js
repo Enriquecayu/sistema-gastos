@@ -32,13 +32,13 @@ export const getBorradas = async (req, res) => {
 // 3. CREAR: Se mantiene igual
 export const postTransacciones = async (req, res) => {
     try {
-        const { monto, descripcion, tipo } = req.body;
+        const { monto, descripcion, tipo, categoria } = req.body;
 
         if (!monto || !descripcion || !tipo) {
             return res.status(400).json("TODOS LOS CAMPOS SON OBLIGATORIOS");
         }
 
-        const nuevoDatos = await Transaccion.create({ monto, descripcion, tipo });
+        const nuevoDatos = await Transaccion.create({ monto, descripcion, tipo, categoria });
         res.status(201).json(nuevoDatos);
     } catch (error) {
         res.status(500).json({ error: "Error al registrar nuevos datos" });
