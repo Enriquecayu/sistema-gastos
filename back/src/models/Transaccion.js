@@ -22,6 +22,11 @@ const transaccion = sequelize.define("transaccion", {
     tipo: {
         type: DataTypes.ENUM("ingreso", "gasto"),
         allowNull: false
+    },
+    categoria: {
+        type: DataTypes.STRING(30),
+        allowNull: false,
+        defaultValue: "Otros"
     }
 }, {
     timestamps: true,
