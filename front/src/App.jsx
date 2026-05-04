@@ -7,7 +7,7 @@ function App() {
   const [borradas, setBorradas] = useState([]); // Estado para la papelera
   const [balance, setBalance] = useState(0);
   const [mostrarPapelera, setMostrarPapelera] = useState(false);
-  
+
   // Estados para el formulario
   const [descripcion, setDescripcion] = useState('');
   const [monto, setMonto] = useState('');
@@ -18,7 +18,7 @@ function App() {
     try {
       const resBalance = await api.get('/balance');
       const resTrans = await api.get('/transacciones');
-      
+
       setBalance(resBalance.data?.saldo_total || 0);
       setTransacciones(resTrans.data || []);
     } catch (error) {
@@ -54,7 +54,7 @@ function App() {
       setMonto('');
       cargarDatos(); // Recarga sin refrescar pantalla
     } catch (error) {
-      alert("Error al guardar");
+      alert("Error al guardar", error);
     }
   };
 
@@ -65,7 +65,7 @@ function App() {
         await api.delete(`/transacciones/${id}`);
         cargarDatos();
       } catch (error) {
-        alert("Error al eliminar");
+        alert("Error al eliminar", error);
       }
     }
   };
@@ -77,7 +77,7 @@ function App() {
       cargarPapelera(); // Actualiza lista de borrados
       cargarDatos();    // Actualiza lista activa y balance
     } catch (error) {
-      alert("Error al restaurar");
+      alert("Error al restaurar", error);
     }
   };
 
@@ -85,8 +85,8 @@ function App() {
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
       <header style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h1>Control de Gastos 💰</h1>
-        <div style={{ 
-          background: balance >= 0 ? '#2ecc71' : '#e74c3c', 
+        <div style={{
+          background: balance >= 0 ? '#2ecc71' : '#e74c3c',
           color: 'white', padding: '20px', borderRadius: '12px', transition: '0.3s'
         }}>
           <h2 style={{ margin: 0 }}>Saldo Actual</h2>
@@ -113,7 +113,7 @@ function App() {
       )}
 
       {/* BOTÓN PAPELERA */}
-      <button 
+      <button
         onClick={() => {
           setMostrarPapelera(!mostrarPapelera);
           if (!mostrarPapelera) cargarPapelera();
@@ -127,7 +127,7 @@ function App() {
       <section>
         <h3>{mostrarPapelera ? "Papelera de Reciclaje" : "Historial de Movimientos"}</h3>
         <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '10px', background: '#fff', border: '1px solid #ddd', borderRadius: '10px' }}>
-          
+
           {/* MODO PAPELERA */}
           {mostrarPapelera ? (
             borradas.length === 0 ? <p>Papelera vacía</p> : borradas.map(t => (
