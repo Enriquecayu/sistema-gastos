@@ -74,7 +74,7 @@ function App() {
             boxShadow: '0 6px 20px rgba(52, 152, 219, 0.3)', transition: '0.3s'
           }}
         >
-          {vistaActual === 'inicio' ? "Ver Libro Diario y Estadísticas →" : "← Volver a Carga de Datos"}
+          {vistaActual === 'inicio' ? "Ver Transacciones y Estadísticas →" : "← Volver a Carga de Datos"}
         </button>
       </header>
 
@@ -86,7 +86,7 @@ function App() {
             boxShadow: '0 12px 45px rgba(0,0,0,0.1)', width: '95%', maxWidth: '1200px'
           }}>
             <h2 style={{ marginTop: 0, color: '#2c3e50', textAlign: 'center', marginBottom: '40px', fontSize: '2rem' }}>
-              Registro de Movimiento Institucional
+              Registro De Transacciones Institucional
             </h2>
             <FormularioTransaccion onGuardar={cargarDatos} />
           </div>
@@ -137,7 +137,7 @@ function App() {
           {/* COLUMNA DERECHA: RESULTADOS (LISTA CON SCROLL DE 6 ELEMENTOS) */}
           <section style={{ background: 'white', padding: '35px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', minHeight: '600px' }}>
             <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #f8f9fa', paddingBottom: '15px', marginBottom: '25px' }}>
-              {mostrarPapelera ? "Registros Eliminados" : verGrafico ? "Análisis de Presupuesto" : "Libro Diario de Movimientos"}
+              {mostrarPapelera ? "Registros Eliminados" : verGrafico ? "Análisis de Presupuesto" : "Historial De Movimientos"}
             </h3>
 
             {mostrarPapelera ? (

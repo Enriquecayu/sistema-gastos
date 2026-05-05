@@ -56,7 +56,7 @@ export const FormularioTransaccion = ({ onGuardar }) => {
             {/* COLUMNA IZQUIERDA: IDENTIFICACIÓN DEL MOVIMIENTO */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div>
-                    <label style={labelStyle}>Concepto / Detalle</label>
+                    <label style={labelStyle}>Descripcion</label>
                     <input
                         type="text"
                         placeholder="Ej: Pago Cooperadora, Compra de tizas, Insumos computación..."
@@ -82,7 +82,7 @@ export const FormularioTransaccion = ({ onGuardar }) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                     <div>
-                        <label style={labelStyle}>Área / Partida</label>
+                        <label style={labelStyle}>Área</label>
                         <select
                             value={formData.categoria}
                             onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
@@ -130,7 +130,7 @@ export const FormularioTransaccion = ({ onGuardar }) => {
                         transition: 'all 0.2s ease'
                     }}
                 >
-                    Registrar en Libro Diario ✅
+                    Registrar Transaccion
                 </button>
             </div>
         </form>
