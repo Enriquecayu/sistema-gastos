@@ -1,10 +1,11 @@
 import Transaccion from "../models/Transaccion.js";
 import { literal, Op } from "sequelize";
 
-// 1. OBTENER ACTIVAS: Sequelize filtra automáticamente las que tienen deletedAt
+// 1. OBTENER ACTIVAS: Filtrado por usuario logueado
 export const getTransacciones = async (req, res) => {
     try {
         const lista = await Transaccion.findAll({
+            where: { userId: req.usuarioId }, // <--- Solo las mías
             order: [['createdAt', 'DESC']]
         });
         res.json(lista);
@@ -13,14 +14,15 @@ export const getTransacciones = async (req, res) => {
     }
 };
 
-// 2. OBTENER BORRADAS: Usamos paranoid: false y filtramos por deletedAt
+// 2. OBTENER BORRADAS: Solo la papelera del usuario actual
 export const getBorradas = async (req, res) => {
     try {
         const listaBorradas = await Transaccion.findAll({
             where: {
-                deletedAt: { [Op.ne]: null } // Que NO sea nulo
+                userId: req.usuarioId, // <--- Solo mis borradas
+                deletedAt: { [Op.ne]: null }
             },
-            paranoid: false, // Obligatorio para poder ver registros con deletedAt
+            paranoid: false,
             order: [['deletedAt', 'DESC']]
         });
         res.json(listaBorradas);
@@ -29,7 +31,7 @@ export const getBorradas = async (req, res) => {
     }
 };
 
-// 3. CREAR: Se mantiene igual
+// 3. CREAR: Se le asigna el ID del usuario automáticamente
 export const postTransacciones = async (req, res) => {
     try {
         const { monto, descripcion, tipo, categoria } = req.body;
@@ -38,17 +40,25 @@ export const postTransacciones = async (req, res) => {
             return res.status(400).json("TODOS LOS CAMPOS SON OBLIGATORIOS");
         }
 
-        const nuevoDatos = await Transaccion.create({ monto, descripcion, tipo, categoria });
+        // Guardamos incluyendo el userId que viene del token
+        const nuevoDatos = await Transaccion.create({ 
+            monto, 
+            descripcion, 
+            tipo, 
+            categoria,
+            userId: req.usuarioId // <--- Vinculación automática
+        });
         res.status(201).json(nuevoDatos);
     } catch (error) {
         res.status(500).json({ error: "Error al registrar nuevos datos" });
     }
 };
 
-// 4. BALANCE: Calcula el saldo ignorando automáticamente las borradas
+// 4. BALANCE: Calcula el saldo exclusivo del usuario logueado
 export const getBalance = async (req, res) => {
     try {
         const resultado = await Transaccion.findAll({
+            where: { userId: req.usuarioId }, // <--- Balance personal
             attributes: [
                 [
                     literal(`COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE -monto END), 0)`),
@@ -62,16 +72,19 @@ export const getBalance = async (req, res) => {
     }
 };
 
-// 5. BORRADO LÓGICO: Llena la columna deletedAt
+// 5. BORRADO LÓGICO: Solo permite borrar si la transacción te pertenece
 export const delTransaccion = async (req, res) => {
     try {
         const { id } = req.params;
         const eliminado = await Transaccion.destroy({
-            where: { id: id }
+            where: { 
+                id: id,
+                userId: req.usuarioId // <--- Seguridad extra: No puedo borrar lo ajeno
+            }
         });
 
         if (eliminado === 0) {
-            return res.status(404).json({ message: "No se encontró la transacción" });
+            return res.status(404).json({ message: "No se encontró la transacción o no tienes permiso" });
         }
 
         res.json({ message: "Transacción enviada a la papelera" });
@@ -80,12 +93,15 @@ export const delTransaccion = async (req, res) => {
     }
 };
 
-// 6. RESTAURAR: Limpia la columna deletedAt para que vuelva a ser activa
+// 6. RESTAURAR: Solo restaura si es tuya
 export const restoreTransaccion = async (req, res) => {
     try {
         const { id } = req.params;
         await Transaccion.restore({
-            where: { id: id }
+            where: { 
+                id: id,
+                userId: req.usuarioId // <--- Seguridad extra
+            }
         });
 
         res.json({ message: "Transacción restaurada correctamente" });
