@@ -13,13 +13,13 @@ import { Register } from './components/Register';
 
 function App() {
   // ----------------------------------------------------
-  // 🔐 NUEVOS ESTADOS PARA PASARELA DE AUTENTICACIÓN
+  // 🔐 ESTADOS PARA PASARELA DE AUTENTICACIÓN Y SEGURIDAD
   // ----------------------------------------------------
   const [user, setUser] = useState(null);
   const [isLoginScreen, setIsLoginScreen] = useState(true);
   const [authing, setAuthing] = useState(true);
 
-  // --- Estados Originales ---
+  // --- Estados Originales del Panel ---
   const [transacciones, setTransacciones] = useState([]);
   const [balance, setBalance] = useState(0);
   const [rango, setRango] = useState({ desde: '', hasta: '' });
@@ -29,17 +29,30 @@ function App() {
   const [mostrarPapelera, setMostrarPapelera] = useState(false);
   const [verGrafico, setVerGrafico] = useState(false);
 
-  // 🔌 EFECTO: Revisar si el usuario ya se había logueado antes en esta PC
+  // 🔌 EFECTO: Control estricto de credenciales al iniciar la App
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    const storedToken = localStorage.getItem("token");
+
+    // Solo si existen ambos datos válidos y no corruptos permitimos el ingreso directo
+    if (storedUser && storedToken && storedUser !== "undefined" && storedToken !== "undefined") {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        // Limpieza automática si el JSON del navegador está dañado
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        setUser(null);
+      }
+    } else {
+      setUser(null);
     }
     setAuthing(false);
   }, []);
 
+  // 🔄 CARGA DE DATOS DESDE LA API (Solo si el operador está activo)
   const cargarDatos = useCallback(async () => {
-    if (!user) return; // 🛡️ Seguridad: Si no hay usuario, no disparamos peticiones vacías
+    if (!user) return; // 🛡️ Seguridad: Evita llamadas al backend sin credenciales
     try {
       const resBalance = await api.get('/balance');
       const resTrans = await api.get('/transacciones');
@@ -48,13 +61,13 @@ function App() {
     } catch (error) {
       console.error("Error al conectar con la base de datos:", error);
     }
-  }, [user]); // Agregamos user a las dependencias para refrescar al loguearse
+  }, [user]);
 
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // 🚪 FUNCIÓN: Limpiar credenciales y cerrar sesión
+  // 🚪 FUNCIÓN: Cierre de sesión y limpieza de caché local
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -63,6 +76,7 @@ function App() {
     setBalance(0);
   };
 
+  // Filtrado lógico de movimientos
   const transaccionesFiltradas = transacciones.filter(t => {
     const cumpleFecha = (!rango.desde || !rango.hasta) ? true :
       (new Date(t.createdAt).toISOString().split('T')[0] >= rango.desde &&
@@ -91,14 +105,14 @@ function App() {
     );
   }
 
-  // 🛡️ FILTRO DE ACCESO GLOBAL: Si el usuario es null, mostramos pasarela de Login/Registro
+  // 🛡️ CANDADO GLOBAL: Si no hay usuario activo, muestra la pasarela Auth
   if (!user) {
     return isLoginScreen
       ? <Login onLoginSuccess={(u) => setUser(u)} onSwitch={() => setIsLoginScreen(false)} />
       : <Register onSwitch={() => setIsLoginScreen(true)} />
   }
 
-  // 💻 INTERFAZ PRINCIPAL (Solo se ejecuta si el usuario está logueado)
+  // 💻 INTERFAZ PRINCIPAL (Solo accesible bajo inicio de sesión exitoso)
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
 
@@ -194,7 +208,7 @@ function App() {
             </div>
           </aside>
 
-          {/* COLUMNA DERECHA: RESULTADOS (LISTA CON SCROLL DE 6 ELEMENTOS) */}
+          {/* COLUMNA DERECHA: RESULTADOS */}
           <section style={{ background: 'white', padding: '35px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', minHeight: '600px' }}>
             <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #f8f9fa', paddingBottom: '15px', marginBottom: '25px' }}>
               {mostrarPapelera ? "Registros Eliminados" : verGrafico ? "Análisis de Presupuesto" : "Historial De Movimientos"}
@@ -205,30 +219,19 @@ function App() {
             ) : verGrafico ? (
               <GraficoGastos transacciones={transaccionesFiltradas} />
             ) : (
-              /* Altura máxima calculada para mostrar exactamente 6 movimientos antes del scroll */
-              <div style={{
-                maxHeight: '530px',
-                overflowY: 'auto',
-                paddingRight: '15px'
-              }}>
+              <div style={{ maxHeight: '530px', overflowY: 'auto', paddingRight: '15px' }}>
                 {transaccionesFiltradas.length === 0 ? (
                   <p style={{ textAlign: 'center', color: '#bdc3c7', marginTop: '50px', fontSize: '1.1rem' }}>
                     No se encontraron movimientos registrados.
                   </p>
                 ) : (
                   [...transaccionesFiltradas].reverse().map((t) => (
-                    <div key={t.id} style={{
-                      display: 'flex', justifyContent: 'space-between', padding: '20px 10px',
-                      borderBottom: '1px solid #f1f3f5', alignItems: 'center'
-                    }}>
+                    <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '20px 10px', borderBottom: '1px solid #f1f3f5', alignItems: 'center' }}>
                       <div>
                         <strong style={{ display: 'block', fontSize: '1.15rem', color: '#2c3e50', marginBottom: '4px' }}>
                           {t.descripcion}
                         </strong>
-                        <span style={{
-                          fontSize: '0.85rem', color: '#ffffff', backgroundColor: '#95a5a6',
-                          padding: '2px 8px', borderRadius: '12px', marginRight: '10px'
-                        }}>
+                        <span style={{ fontSize: '0.85rem', color: '#ffffff', backgroundColor: '#95a5a6', padding: '2px 8px', borderRadius: '12px', marginRight: '10px' }}>
                           {t.categoria}
                         </span>
                         <small style={{ color: '#bdc3c7' }}>
@@ -236,10 +239,7 @@ function App() {
                         </small>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
-                        <span style={{
-                          fontWeight: 'bold', fontSize: '1.3rem',
-                          color: t.tipo === 'gasto' ? '#e74c3c' : '#27ae60'
-                        }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '1.3rem', color: t.tipo === 'gasto' ? '#e74c3c' : '#27ae60' }}>
                           {t.tipo === 'gasto' ? '-' : '+'}${parseFloat(t.monto).toLocaleString()}
                         </span>
                         <button
@@ -260,7 +260,7 @@ function App() {
         </main>
       )}
 
-      {/* ESTILOS GLOBALES RÁPIDOS */}
+      {/* ESTILOS GLOBALES */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
