@@ -7,8 +7,19 @@ import { FormularioTransaccion } from './features/FormularioTransaccion';
 import { Papelera } from './features/Papelera';
 import { GraficoGastos } from './features/GraficoGastos';
 import { FiltroFecha } from './features/FiltroFecha';
+// Nuevos componentes de Autenticación (ahora directo en components)
+import { Login } from './components/Login';
+import { Register } from './components/Register';
 
 function App() {
+  // ----------------------------------------------------
+  // 🔐 NUEVOS ESTADOS PARA PASARELA DE AUTENTICACIÓN
+  // ----------------------------------------------------
+  const [user, setUser] = useState(null);
+  const [isLoginScreen, setIsLoginScreen] = useState(true);
+  const [authing, setAuthing] = useState(true);
+
+  // --- Estados Originales ---
   const [transacciones, setTransacciones] = useState([]);
   const [balance, setBalance] = useState(0);
   const [rango, setRango] = useState({ desde: '', hasta: '' });
@@ -18,7 +29,17 @@ function App() {
   const [mostrarPapelera, setMostrarPapelera] = useState(false);
   const [verGrafico, setVerGrafico] = useState(false);
 
+  // 🔌 EFECTO: Revisar si el usuario ya se había logueado antes en esta PC
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setAuthing(false);
+  }, []);
+
   const cargarDatos = useCallback(async () => {
+    if (!user) return; // 🛡️ Seguridad: Si no hay usuario, no disparamos peticiones vacías
     try {
       const resBalance = await api.get('/balance');
       const resTrans = await api.get('/transacciones');
@@ -27,11 +48,20 @@ function App() {
     } catch (error) {
       console.error("Error al conectar con la base de datos:", error);
     }
-  }, []);
+  }, [user]); // Agregamos user a las dependencias para refrescar al loguearse
 
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
+
+  // 🚪 FUNCIÓN: Limpiar credenciales y cerrar sesión
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    setTransacciones([]);
+    setBalance(0);
+  };
 
   const transaccionesFiltradas = transacciones.filter(t => {
     const cumpleFecha = (!rango.desde || !rango.hasta) ? true :
@@ -52,8 +82,38 @@ function App() {
     }
   };
 
+  // 🕰️ PANTALLA DE CARGA INICIAL
+  if (authing) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+        <h3>Cargando entorno institucional...</h3>
+      </div>
+    );
+  }
+
+  // 🛡️ FILTRO DE ACCESO GLOBAL: Si el usuario es null, mostramos pasarela de Login/Registro
+  if (!user) {
+    return isLoginScreen
+      ? <Login onLoginSuccess={(u) => setUser(u)} onSwitch={() => setIsLoginScreen(false)} />
+      : <Register onSwitch={() => setIsLoginScreen(true)} />
+  }
+
+  // 💻 INTERFAZ PRINCIPAL (Solo se ejecuta si el usuario está logueado)
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+
+      {/* 👤 BARRA DE USUARIO SUPERIOR */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#2c3e50', padding: '12px 25px', borderRadius: '12px', marginBottom: '25px', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+        <span>👤 Operador activo: <strong>{user.nombre}</strong> ({user.email})</span>
+        <button
+          onClick={handleLogout}
+          style={{ background: '#e74c3c', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}
+          onMouseOver={(e) => e.target.style.background = '#c0392b'}
+          onMouseOut={(e) => e.target.style.background = '#e74c3c'}
+        >
+          Cerrar Sesión ×
+        </button>
+      </div>
 
       {/* CABECERA INSTITUCIONAL */}
       <header style={{ textAlign: 'center', marginBottom: '30px' }}>
