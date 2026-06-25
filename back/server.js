@@ -16,9 +16,9 @@ const PORT = process.env.PORT || 3000;
 
 // Configuración de Middlewares
 app.use(cors({
-    origin: process.env.FRONTEND_URL,
+    origin: '*', // Permite que CUALQUIER frontend se conecte a tu API
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
