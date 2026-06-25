@@ -8,14 +8,22 @@ const sequelize = new Sequelize({
     password: process.env.DB_PASS,
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
-    logging: false
+    logging: false,
+    // 👇 AGREGÁ ESTA SECCIÓN JUSTO ACÁ 👇
+    dialectOptions: {
+        ssl: {
+            require: true,
+            rejectUnauthorized: false
+        }
+    }
 });
 
 try {
     await sequelize.authenticate();
     console.log("CONEXION ESTABLECIDA CON EXITO A LA BASE DE DATOS");
 } catch (error) {
-    console.error(error.message);
+    // Te sumé el mensaje original detallado para que si pasa algo, Render te diga el porqué exacto
+    console.error("ERROR DETALLADO:", error.message);
 }
 
 export default sequelize;
